@@ -16,11 +16,11 @@ from yolox.utils import configure_module, configure_nccl, configure_omp, get_num
 
 
 def make_parser():
-    parser = argparse.ArgumentParser("YOLOX train parser")
+    parser = argparse.ArgumentParser("YOLOX train parser") # 参数解析器
     parser.add_argument("-expn", "--experiment-name", type=str, default=None)
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
-    # distributed
+    # distributed # NVIDIA GPU nccl框架
     parser.add_argument(
         "--dist-backend", default="nccl", type=str, help="distributed backend"
     )
@@ -41,7 +41,7 @@ def make_parser():
         type=str,
         help="plz input your experiment description file",
     )
-    parser.add_argument(
+    parser.add_argument(# 断点续训
         "--resume", default=False, action="store_true", help="resume training"
     )
     parser.add_argument("-c", "--ckpt", default=None, type=str, help="checkpoint file")
@@ -111,8 +111,8 @@ def main(exp: Exp, args):
 
     # set environment variables for distributed training
     configure_nccl()
-    configure_omp()
-    cudnn.benchmark = True
+    configure_omp() # 设置分布式训练的环境变量
+    cudnn.benchmark = True # 自动寻找最适合当前配置的高效算法，来达到优化运行效率的问题
 
     trainer = exp.get_trainer(args)
     trainer.train()

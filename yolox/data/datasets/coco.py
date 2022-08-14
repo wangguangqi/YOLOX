@@ -63,10 +63,10 @@ class COCODataset(Dataset):
 
         self.coco = COCO(os.path.join(self.data_dir, "annotations", self.json_file))
         remove_useless_info(self.coco)
-        self.ids = self.coco.getImgIds()
-        self.class_ids = sorted(self.coco.getCatIds())
+        self.ids = self.coco.getImgIds() # 获取图片id
+        self.class_ids = sorted(self.coco.getCatIds()) # 获取类别
         self.cats = self.coco.loadCats(self.coco.getCatIds())
-        self._classes = tuple([c["name"] for c in self.cats])
+        self._classes = tuple([c["name"] for c in self.cats]) #获取对应类别名
         self.imgs = None
         self.name = name
         self.img_size = img_size
@@ -137,8 +137,8 @@ class COCODataset(Dataset):
         im_ann = self.coco.loadImgs(id_)[0]
         width = im_ann["width"]
         height = im_ann["height"]
-        anno_ids = self.coco.getAnnIds(imgIds=[int(id_)], iscrowd=False)
-        annotations = self.coco.loadAnns(anno_ids)
+        anno_ids = self.coco.getAnnIds(imgIds=[int(id_)], iscrowd=False) # 一个图片有多少个目标
+        annotations = self.coco.loadAnns(anno_ids) # 目标对应的详细信息
         objs = []
         for obj in annotations:
             x1 = np.max((0, obj["bbox"][0]))

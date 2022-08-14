@@ -120,6 +120,7 @@ def random_affine(
     scales=0.1,
     shear=10,
 ):
+    # 仿射变换及其变换矩阵的理解
     M, scale = get_affine_matrix(target_size, degrees, translate, scales, shear)
 
     img = cv2.warpAffine(img, M, dsize=target_size, borderValue=(114, 114, 114))
@@ -153,8 +154,8 @@ def preproc(img, input_size, swap=(2, 0, 1)):
     ).astype(np.uint8)
     padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
 
-    padded_img = padded_img.transpose(swap)
-    padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
+    padded_img = padded_img.transpose(swap) #调整通道位置
+    padded_img = np.ascontiguousarray(padded_img, dtype=np.float32) #变成连续存储空间
     return padded_img, r
 
 

@@ -43,7 +43,7 @@ class Trainer:
         # training related attr
         self.max_epoch = exp.max_epoch
         self.amp_training = args.fp16
-        self.scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=args.fp16) # 梯度缩放
         self.is_distributed = get_world_size() > 1
         self.rank = get_rank()
         self.local_rank = get_local_rank()
@@ -97,7 +97,7 @@ class Trainer:
         inps, targets = self.prefetcher.next()
         inps = inps.to(self.data_type)
         targets = targets.to(self.data_type)
-        targets.requires_grad = False
+        targets.requires_grad = False  # 控制梯度计算
         inps, targets = self.exp.preprocess(inps, targets, self.input_size)
         data_end_time = time.time()
 
@@ -106,10 +106,10 @@ class Trainer:
 
         loss = outputs["total_loss"]
 
-        self.optimizer.zero_grad()
-        self.scaler.scale(loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        self.optimizer.zero_grad() # 梯度初始化为0
+        self.scaler.scale(loss).backward() # 对loss进行缩放，针对缩放后的loss进行反向传播
+        self.scaler.step(self.optimizer) # 将梯度值缩放回原尺度后，优化器进行一步优化
+        self.scaler.update() # 更新scalar的缩放信息
 
         if self.use_model_ema:
             self.ema_model.update(self.model)

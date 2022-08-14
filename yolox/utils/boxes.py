@@ -87,7 +87,7 @@ def bboxes_iou(bboxes_a, bboxes_b, xyxy=True):
         area_b = torch.prod(bboxes_b[:, 2:] - bboxes_b[:, :2], 1)
     else:
         tl = torch.max(
-            (bboxes_a[:, None, :2] - bboxes_a[:, None, 2:] / 2),
+            (bboxes_a[:, None, :2] - bboxes_a[:, None, 2:] / 2), # 追加一个维度
             (bboxes_b[:, :2] - bboxes_b[:, 2:] / 2),
         )
         br = torch.min(

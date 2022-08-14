@@ -163,12 +163,12 @@ class YOLOXHead(nn.Module):
 
             if self.training:
                 output = torch.cat([reg_output, obj_output, cls_output], 1)
-                output, grid = self.get_output_and_grid(
+                output, grid = self.get_output_and_grid(  # 得到每个格子的输出和左上角的坐标
                     output, k, stride_this_level, xin[0].type()
                 )
-                x_shifts.append(grid[:, :, 0])
-                y_shifts.append(grid[:, :, 1])
-                expanded_strides.append(
+                x_shifts.append(grid[:, :, 0]) # 得到每个格子的x坐标
+                y_shifts.append(grid[:, :, 1]) # 得到每个格子的y坐标
+                expanded_strides.append( # 得到每个格子的步长
                     torch.zeros(1, grid.shape[1])
                     .fill_(stride_this_level)
                     .type_as(xin[0])
@@ -294,9 +294,9 @@ class YOLOXHead(nn.Module):
                 obj_target = outputs.new_zeros((total_num_anchors, 1))
                 fg_mask = outputs.new_zeros(total_num_anchors).bool()
             else:
-                gt_bboxes_per_image = labels[batch_idx, :num_gt, 1:5]
-                gt_classes = labels[batch_idx, :num_gt, 0]
-                bboxes_preds_per_image = bbox_preds[batch_idx]
+                gt_bboxes_per_image = labels[batch_idx, :num_gt, 1:5] #得到每张图片的box
+                gt_classes = labels[batch_idx, :num_gt, 0] # 真实分类
+                bboxes_preds_per_image = bbox_preds[batch_idx] # 每张图片的预测框
 
                 try:
                     (
@@ -356,10 +356,10 @@ class YOLOXHead(nn.Module):
                         "cpu",
                     )
 
-                torch.cuda.empty_cache()
+                torch.cuda.empty_cache() # 清除显存
                 num_fg += num_fg_img
 
-                cls_target = F.one_hot(
+                cls_target = F.one_hot( #得到80类别对应的iou
                     gt_matched_classes.to(torch.int64), self.num_classes
                 ) * pred_ious_this_matching.unsqueeze(-1)
                 obj_target = fg_mask.unsqueeze(-1)
@@ -532,11 +532,12 @@ class YOLOXHead(nn.Module):
         total_num_anchors,
         num_gt,
     ):
+        # 计算8400个框的中心点
         expanded_strides_per_image = expanded_strides[0]
         x_shifts_per_image = x_shifts[0] * expanded_strides_per_image
-        y_shifts_per_image = y_shifts[0] * expanded_strides_per_image
+        y_shifts_per_image = y_shifts[0] * expanded_strides_per_image #左上角坐标
         x_centers_per_image = (
-            (x_shifts_per_image + 0.5 * expanded_strides_per_image)
+            (x_shifts_per_image + 0.5 * expanded_strides_per_image) #每个格子中心坐标
             .unsqueeze(0)
             .repeat(num_gt, 1)
         )  # [n_anchor] -> [n_gt, n_anchor]
@@ -545,7 +546,7 @@ class YOLOXHead(nn.Module):
             .unsqueeze(0)
             .repeat(num_gt, 1)
         )
-
+        # 计算真实框的四边
         gt_bboxes_per_image_l = (
             (gt_bboxes_per_image[:, 0] - 0.5 * gt_bboxes_per_image[:, 2])
             .unsqueeze(1)
@@ -566,7 +567,7 @@ class YOLOXHead(nn.Module):
             .unsqueeze(1)
             .repeat(1, total_num_anchors)
         )
-
+        # 判断8400个框的中心点有哪些在真实框内
         b_l = x_centers_per_image - gt_bboxes_per_image_l
         b_r = gt_bboxes_per_image_r - x_centers_per_image
         b_t = y_centers_per_image - gt_bboxes_per_image_t
@@ -576,7 +577,7 @@ class YOLOXHead(nn.Module):
         is_in_boxes = bbox_deltas.min(dim=-1).values > 0.0
         is_in_boxes_all = is_in_boxes.sum(dim=0) > 0
         # in fixed center
-
+        # 取真实框的中心为中心，格子边长的5倍为边长的正方形
         center_radius = 2.5
 
         gt_bboxes_per_image_l = (gt_bboxes_per_image[:, 0]).unsqueeze(1).repeat(
@@ -591,7 +592,7 @@ class YOLOXHead(nn.Module):
         gt_bboxes_per_image_b = (gt_bboxes_per_image[:, 1]).unsqueeze(1).repeat(
             1, total_num_anchors
         ) + center_radius * expanded_strides_per_image.unsqueeze(0)
-
+        # 判断8400个框的中心点有哪些在这个取的正方形以内
         c_l = x_centers_per_image - gt_bboxes_per_image_l
         c_r = gt_bboxes_per_image_r - x_centers_per_image
         c_t = y_centers_per_image - gt_bboxes_per_image_t
@@ -601,10 +602,10 @@ class YOLOXHead(nn.Module):
         is_in_centers_all = is_in_centers.sum(dim=0) > 0
 
         # in boxes and in centers
-        is_in_boxes_anchor = is_in_boxes_all | is_in_centers_all
+        is_in_boxes_anchor = is_in_boxes_all | is_in_centers_all # 两者并集
 
         is_in_boxes_and_center = (
-            is_in_boxes[:, is_in_boxes_anchor] & is_in_centers[:, is_in_boxes_anchor]
+            is_in_boxes[:, is_in_boxes_anchor] & is_in_centers[:, is_in_boxes_anchor] # 两者交集
         )
         return is_in_boxes_anchor, is_in_boxes_and_center
 
@@ -615,7 +616,7 @@ class YOLOXHead(nn.Module):
 
         ious_in_boxes_matrix = pair_wise_ious
         n_candidate_k = min(10, ious_in_boxes_matrix.size(1))
-        topk_ious, _ = torch.topk(ious_in_boxes_matrix, n_candidate_k, dim=1)
+        topk_ious, _ = torch.topk(ious_in_boxes_matrix, n_candidate_k, dim=1) # 选取前不多于十个的IOU
         dynamic_ks = torch.clamp(topk_ious.sum(1).int(), min=1)
         dynamic_ks = dynamic_ks.tolist()
         for gt_idx in range(num_gt):
@@ -629,17 +630,17 @@ class YOLOXHead(nn.Module):
         anchor_matching_gt = matching_matrix.sum(0)
         if (anchor_matching_gt > 1).sum() > 0:
             _, cost_argmin = torch.min(cost[:, anchor_matching_gt > 1], dim=0)
-            matching_matrix[:, anchor_matching_gt > 1] *= 0
-            matching_matrix[cost_argmin, anchor_matching_gt > 1] = 1
-        fg_mask_inboxes = matching_matrix.sum(0) > 0
-        num_fg = fg_mask_inboxes.sum().item()
+            matching_matrix[:, anchor_matching_gt > 1] *= 0 # 大于1的全为0
+            matching_matrix[cost_argmin, anchor_matching_gt > 1] = 1 # cost最小的改为1
+        fg_mask_inboxes = matching_matrix.sum(0) > 0 # 样本选择区间那些被选择成正样本
+        num_fg = fg_mask_inboxes.sum().item() # 正样本个数
 
-        fg_mask[fg_mask.clone()] = fg_mask_inboxes
+        fg_mask[fg_mask.clone()] = fg_mask_inboxes # 8400中有哪些是正样本
 
-        matched_gt_inds = matching_matrix[:, fg_mask_inboxes].argmax(0)
-        gt_matched_classes = gt_classes[matched_gt_inds]
+        matched_gt_inds = matching_matrix[:, fg_mask_inboxes].argmax(0) # 每个正样本对应的真实框
+        gt_matched_classes = gt_classes[matched_gt_inds] # 每个正样本对应的真实类别
 
-        pred_ious_this_matching = (matching_matrix * pair_wise_ious).sum(0)[
+        pred_ious_this_matching = (matching_matrix * pair_wise_ious).sum(0)[ #每个正样本与真实框对应的iou
             fg_mask_inboxes
         ]
         return num_fg, gt_matched_classes, pred_ious_this_matching, matched_gt_inds

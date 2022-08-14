@@ -163,45 +163,45 @@ class MosaicDetection(Dataset):
         jit_factor = random.uniform(*self.mixup_scale)
         FLIP = random.uniform(0, 1) > 0.5
         cp_labels = []
-        while len(cp_labels) == 0:
+        while len(cp_labels) == 0:  #1.加载图片
             cp_index = random.randint(0, self.__len__() - 1)
             cp_labels = self._dataset.load_anno(cp_index)
         img, cp_labels, _, _ = self._dataset.pull_item(cp_index)
 
-        if len(img.shape) == 3:
+        if len(img.shape) == 3:  #2.生成mask，为mixup做准备
             cp_img = np.ones((input_dim[0], input_dim[1], 3), dtype=np.uint8) * 114
         else:
             cp_img = np.ones(input_dim, dtype=np.uint8) * 114
 
-        cp_scale_ratio = min(input_dim[0] / img.shape[0], input_dim[1] / img.shape[1])
+        cp_scale_ratio = min(input_dim[0] / img.shape[0], input_dim[1] / img.shape[1]) # 3. resize图片到指定尺寸
         resized_img = cv2.resize(
             img,
             (int(img.shape[1] * cp_scale_ratio), int(img.shape[0] * cp_scale_ratio)),
             interpolation=cv2.INTER_LINEAR,
         )
 
-        cp_img[
+        cp_img[ # 4. 将图片添加到mask
             : int(img.shape[0] * cp_scale_ratio), : int(img.shape[1] * cp_scale_ratio)
         ] = resized_img
 
-        cp_img = cv2.resize(
+        cp_img = cv2.resize( # 5. 图片缩放
             cp_img,
             (int(cp_img.shape[1] * jit_factor), int(cp_img.shape[0] * jit_factor)),
         )
         cp_scale_ratio *= jit_factor
 
         if FLIP:
-            cp_img = cp_img[:, ::-1, :]
+            cp_img = cp_img[:, ::-1, :] # 6. 图片翻转
 
         origin_h, origin_w = cp_img.shape[:2]
         target_h, target_w = origin_img.shape[:2]
-        padded_img = np.zeros(
+        padded_img = np.zeros(  # 7.按照大的图片生成mask
             (max(origin_h, target_h), max(origin_w, target_w), 3), dtype=np.uint8
         )
-        padded_img[:origin_h, :origin_w] = cp_img
+        padded_img[:origin_h, :origin_w] = cp_img  # 8.添加图片进mask
 
         x_offset, y_offset = 0, 0
-        if padded_img.shape[0] > target_h:
+        if padded_img.shape[0] > target_h:  # 9. 如果图片大于合成后的大小，进行裁剪
             y_offset = random.randint(0, padded_img.shape[0] - target_h - 1)
         if padded_img.shape[1] > target_w:
             x_offset = random.randint(0, padded_img.shape[1] - target_w - 1)
@@ -209,7 +209,7 @@ class MosaicDetection(Dataset):
             y_offset: y_offset + target_h, x_offset: x_offset + target_w
         ]
 
-        cp_bboxes_origin_np = adjust_box_anns(
+        cp_bboxes_origin_np = adjust_box_anns( #10. 标签框位置调整
             cp_labels[:, :4].copy(), cp_scale_ratio, 0, 0, origin_w, origin_h
         )
         if FLIP:
@@ -224,11 +224,11 @@ class MosaicDetection(Dataset):
             cp_bboxes_transformed_np[:, 1::2] - y_offset, 0, target_h
         )
 
-        cls_labels = cp_labels[:, 4:5].copy()
+        cls_labels = cp_labels[:, 4:5].copy() # 11.标记框叠加
         box_labels = cp_bboxes_transformed_np
         labels = np.hstack((box_labels, cls_labels))
         origin_labels = np.vstack((origin_labels, labels))
         origin_img = origin_img.astype(np.float32)
-        origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32)
+        origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32) #12 混合
 
         return origin_img.astype(np.uint8), origin_labels

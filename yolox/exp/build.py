@@ -33,7 +33,7 @@ def get_exp(exp_file=None, exp_name=None):
         exp_file (str): file path of experiment.
         exp_name (str): name of experiment. "yolo-s",
     """
-    assert (
+    assert ( # 断言函数，判断内容为假时报错
         exp_file is not None or exp_name is not None
     ), "plz provide exp file or exp name."
     if exp_file is not None:
