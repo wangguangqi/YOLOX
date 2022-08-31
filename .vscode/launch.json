@@ -24,6 +24,22 @@
     //     }
     // ]
     // train
+    // "configurations": [
+    //     {
+    //         "name": "Python: Current File",
+    //         "type": "python",
+    //         "request": "launch",
+    //         "program": "${file}",
+    //         "console": "integratedTerminal",
+    //         "args": [
+    //             "-n", "yolox-s",
+    //             "-c", "/root/YOLOX/checkpoints/yolox_s.pth",
+    //             "-d","1",
+    //             "-b","4",
+    //        ]
+    //     }
+    // ]
+    //keypoint train
     "configurations": [
         {
             "name": "Python: Current File",
@@ -32,7 +48,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-n", "yolox-s",
+                "-f", "exps/default/yolox_kp_s.py",
                 "-c", "/root/YOLOX/checkpoints/yolox_s.pth",
                 "-d","1",
                 "-b","4",

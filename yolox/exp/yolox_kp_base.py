@@ -143,6 +143,7 @@ class KP_Exp(BaseExp):
     def get_data_loader(self, batch_size, is_distributed, no_aug=False, cache_img=False):
         from yolox.data import (
             COCODataset,
+            COCOKeypointDataset,
             TrainTransform,
             YoloBatchSampler,
             DataLoader,
@@ -153,7 +154,7 @@ class KP_Exp(BaseExp):
         from yolox.utils import wait_for_the_master
 
         with wait_for_the_master():
-            dataset = COCODataset(
+            dataset = COCOKeypointDataset(
                 data_dir=self.data_dir,
                 json_file=self.train_ann,
                 img_size=self.input_size,
@@ -162,6 +163,7 @@ class KP_Exp(BaseExp):
                     flip_prob=self.flip_prob,
                     hsv_prob=self.hsv_prob),
                 cache=cache_img,
+                exp=self
             )
 
         dataset = MosaicDetection(
@@ -181,7 +183,7 @@ class KP_Exp(BaseExp):
             mosaic_prob=self.mosaic_prob,
             mixup_prob=self.mixup_prob,
         )
-
+        
         self.dataset = dataset
 
         if is_distributed:
