@@ -152,6 +152,7 @@ class Trainer:
             no_aug=self.no_aug,
             cache_img=self.args.cache,
         )
+       
         logger.info("init prefetcher, this might take one minute or less...")
         self.prefetcher = DataPrefetcher(self.train_loader)
         # max_iter means iters per epoch

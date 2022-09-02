@@ -9,8 +9,10 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
-from .base_exp import BaseExp
+from yolox.data.data_augment import KeypointTransform
 
+from .base_exp import BaseExp
+import numpy as np
 
 class KP_Exp(BaseExp):
     def __init__(self):
@@ -35,7 +37,9 @@ class KP_Exp(BaseExp):
         self.labels = "kp_labels"
         # set worker to 4 for shorter dataloader init time
         # If your training process cost many memory, reduce this value.
-        self.data_num_workers = 4
+        # self.data_num_workers = 4
+        # debug info
+        self.data_num_workers = 1
         self.input_size = (640, 640)  # (height, width)
         # Actual multiscale ranges: [640 - 5 * 32, 640 + 5 * 32].
         # To disable multiscale training, set the value to 0.
@@ -60,16 +64,22 @@ class KP_Exp(BaseExp):
         self.hsv_prob = 1.0
         # prob of applying flip aug
         self.flip_prob = 0.5
+        # image flip up-down (probability)
+        self.flipud = 0.0
+        # image flip left-right (probability)
+        self.fliplr = 0.5
         # rotation angle range, for example, if set to 2, the true range is (-2, 2)
-        self.degrees = 10.0
+        self.degrees = 0.0
         # translate range, for example, if set to 0.1, the true range is (-0.1, 0.1)
         self.translate = 0.1
-        self.mosaic_scale = (0.1, 2)
+        self.mosaic_scale = 0.9
+        self.copy_paste= 0.0
+        self.perspective=0.0
         # apply mixup aug or not
         self.enable_mixup = True
         self.mixup_scale = (0.5, 1.5)
         # shear angle range, for example, if set to 2, the true range is (-2, 2)
-        self.shear = 2.0
+        self.shear = 0.0
         # keypoint object size (normalized by longest img dim)
         self.kp_bbox = 0.05 
         # for left-right keypoint flipping
@@ -78,6 +88,12 @@ class KP_Exp(BaseExp):
         self.kp_left = [1, 3, 5, 7, 9, 11, 13, 15]
         self.kp_face = [0, 1, 2, 3, 4]
 
+        # image HSV-Hue augmentation (fraction)
+        self.hsv_h = 0.015
+        # image HSV-Saturation augmentation (fraction)
+        self.hsv_s = 0.7
+        # image HSV-Value augmentation (fraction)
+        self.hsv_v = 0.4
         # --------------  training config --------------------- #
         # epoch number used for warmup
         self.warmup_epochs = 5
@@ -149,6 +165,7 @@ class KP_Exp(BaseExp):
             DataLoader,
             InfiniteSampler,
             MosaicDetection,
+            KeypointMosaicDetection,
             worker_init_reset_seed,
         )
         from yolox.utils import wait_for_the_master
@@ -165,15 +182,38 @@ class KP_Exp(BaseExp):
                 cache=cache_img,
                 exp=self
             )
+        nc = self.num_classes
+        validLabels=[]
+        for  annotation in dataset.annotations:
+            if len(annotation[0]):
+                validLabels.append(annotation[0])
+            
+        mlc = int(np.concatenate(validLabels, 0)[:, 0].max())  # max label class
+        assert mlc < nc, f'Label class {mlc} exceeds nc={nc} in {__file__}. Possible class labels are 0-{nc - 1}'
 
-        dataset = MosaicDetection(
+        # self.max_labels = max_labels
+        # self.flipud = flipud
+        # self.fliplr = fliplr
+        # self.hsv_prob = hsv_prob
+        # self.hsv_h = hsv_h
+        # self.hsv_s = hsv_s
+        # self.hsv_v = hsv_v
+        # self.kp_flip = kp_flip
+        # self.obj_flip = obj_flip
+        dataset = KeypointMosaicDetection(
             dataset,
             mosaic=not no_aug,
             img_size=self.input_size,
-            preproc=TrainTransform(
+            preproc=KeypointTransform(
                 max_labels=120,
-                flip_prob=self.flip_prob,
-                hsv_prob=self.hsv_prob),
+                flipud=self.flipud,
+                fliplr=self.fliplr,
+                hsv_prob=self.hsv_prob,
+                hsv_h=self.hsv_h,
+                hsv_s=self.hsv_s,
+                hsv_v=self.hsv_v,
+                kp_flip=self.kp_flip,
+                obj_flip=dataset.obj_flip),
             degrees=self.degrees,
             translate=self.translate,
             mosaic_scale=self.mosaic_scale,
@@ -182,6 +222,9 @@ class KP_Exp(BaseExp):
             enable_mixup=self.enable_mixup,
             mosaic_prob=self.mosaic_prob,
             mixup_prob=self.mixup_prob,
+            copy_paste=self.copy_paste,
+            perspective=self.perspective,
+            kp_bbox=self.kp_bbox,
         )
         
         self.dataset = dataset
@@ -191,6 +234,7 @@ class KP_Exp(BaseExp):
 
         sampler = InfiniteSampler(len(self.dataset), seed=self.seed if self.seed else 0)
 
+        batch_size = min(batch_size, len(dataset))
         batch_sampler = YoloBatchSampler(
             sampler=sampler,
             batch_size=batch_size,

@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 
 from yolox.utils import xyxy2cxcywh
-
+import torch
 
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
     hsv_augs = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain]  # random gains
@@ -28,7 +28,21 @@ def augment_hsv(img, hgain=5, sgain=30, vgain=30):
     img_hsv[..., 1] = np.clip(img_hsv[..., 1] + hsv_augs[1], 0, 255)
     img_hsv[..., 2] = np.clip(img_hsv[..., 2] + hsv_augs[2], 0, 255)
 
-    cv2.cvtColor(img_hsv.astype(img.dtype), cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+#     cv2.cvtColor(img_hsv.astype(img.dtype), cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+def augment_hsv_yolov5(im, hgain=0.5, sgain=0.5, vgain=0.5):
+    # HSV color-space augmentation
+    if hgain or sgain or vgain:
+        r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+        hue, sat, val = cv2.split(cv2.cvtColor(im, cv2.COLOR_BGR2HSV))
+        dtype = im.dtype  # uint8
+
+        x = np.arange(0, 256, dtype=r.dtype)
+        lut_hue = ((x * r[0]) % 180).astype(dtype)
+        lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
+        lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
+
+        im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=im)  # no return needed
 
 
 def get_aug_params(value, center=0):
@@ -158,6 +172,90 @@ def preproc(img, input_size, swap=(2, 0, 1)):
     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32) #变成连续存储空间
     return padded_img, r
 
+def clip_coords(boxes, shape):
+    # Clip bounding xyxy bounding boxes to image shape (height, width)
+    if isinstance(boxes, torch.Tensor):  # faster individually
+        boxes[:, 0].clamp_(0, shape[1])  # x1
+        boxes[:, 1].clamp_(0, shape[0])  # y1
+        boxes[:, 2].clamp_(0, shape[1])  # x2
+        boxes[:, 3].clamp_(0, shape[0])  # y2
+    else:  # np.array (faster grouped)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]].clip(0, shape[1])  # x1, x2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]].clip(0, shape[0])  # y1, y2
+
+
+
+def xyxy2xywhn(x, w=640, h=640, clip=False, eps=0.0):
+    # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] normalized where xy1=top-left, xy2=bottom-right
+    if clip:
+        clip_coords(x, (h - eps, w - eps))  # warning: inplace clip
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[:, 0] = ((x[:, 0] + x[:, 2]) / 2) / w  # x center
+    y[:, 1] = ((x[:, 1] + x[:, 3]) / 2) / h  # y center
+    y[:, 2] = (x[:, 2] - x[:, 0]) / w  # width
+    y[:, 3] = (x[:, 3] - x[:, 1]) / h  # height
+
+    # convert keypoints from [x, y, v] to [x, y, v] normalized
+    if y.shape[-1] > 4:
+        nl = y.shape[0]
+        kp = y[:, 4:].reshape(nl, -1, 3)
+        kp[..., 0] /= w
+        kp[..., 1] /= h
+        y[:, 4:] = kp.reshape(nl, -1)
+
+    return y
+
+class KeypointTransform:
+    def __init__(self, max_labels=50, flipud = 0.0, fliplr = 0.5, hsv_prob=1.0,hsv_h = 0.015,hsv_s = 0.7,hsv_v = 0.4,kp_flip=[0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],obj_flip={0: 0}):
+        self.max_labels = max_labels
+        self.flipud = flipud
+        self.fliplr = fliplr
+        self.hsv_prob = hsv_prob
+        self.hsv_h = hsv_h
+        self.hsv_s = hsv_s
+        self.hsv_v = hsv_v
+        self.kp_flip = kp_flip
+        self.obj_flip = obj_flip
+
+    def __call__(self,image,labels,input_dim):
+        nl = len(labels)  # number of labels
+        if nl:
+            labels[:, 1:] = xyxy2xywhn(labels[:, 1:], w=image.shape[1], h=image.shape[0], clip=True, eps=1E-3)
+
+        # HSV color-space
+        augment_hsv_yolov5(image, hgain=self.hsv_h, sgain=self.hsv_s, vgain=self.hsv_v)
+        img = image.copy()
+        # Flip up-down
+        if random.random() < self.flipud:
+            img = np.flipud(img)
+            if nl:
+                labels[:, 2] = 1 - labels[:, 2]
+        # Flip left-right
+        if random.random() < self.fliplr:
+            img = np.fliplr(img)
+            if nl:
+                labels[:, 1] = 1 - labels[:, 1]
+
+                if self.kp_flip and labels.shape[1] > 5:
+                    labels[:, 5::3] = 1 - labels[:, 5::3]  # flip keypoints in person object
+                    keypoints = labels[:, 5:].reshape(nl, -1, 3)
+                    keypoints = keypoints[:, self.kp_flip]  # reorder left / right keypoints
+                    labels[:, 5:] = keypoints.reshape(nl, -1)
+
+                if self.obj_flip:
+                    for i, cls in enumerate(labels[:, 0]):
+                        labels[i, 0] = self.obj_flip[labels[i, 0]]
+        
+        labels_out = np.zeros((nl, labels.shape[-1] + 1))
+        if nl:
+            labels_out[:, 1:] =  labels
+            
+        
+        # Convert
+        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        img = np.ascontiguousarray(img)
+
+        return img, labels_out        
 
 class TrainTransform:
     def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):

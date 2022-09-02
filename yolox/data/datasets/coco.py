@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 # Copyright (c) Megvii, Inc. and its affiliates.
 
+from __future__ import annotations
 import os
 from loguru import logger
 
@@ -164,7 +165,9 @@ class COCOKeypointDataset(Dataset):
 
         num_objs = len(objs)
         res=[]
+        segments=[]
         for ix, obj in enumerate(objs):
+            segment = obj['segmentation']
             keypoints = np.array(obj['keypoints']).reshape([-1, 3])
             visibleKeypintNum=0
             for keypoint in keypoints:
@@ -199,8 +202,14 @@ class COCOKeypointDataset(Dataset):
                     if self.exp.pose_obj:
                         for j in range(keypoints.shape[0]):
                             res1[visibleKeypintNum1,5+3*j:5+3*(j+1)] = [0,0,0]        
-            res.append(res1)            
-
+            for element in res1:
+                res.append(element)  
+            # for element in segment:   
+            #     segments.append(segment)  
+        res = np.array(res)
+        if len(res) == 0:
+            res = res.reshape(-1,56)         
+       
         img_info = (height, width)
         r = min(self.img_size[0] / height, self.img_size[1] / width)
         resized_info = (int(height * r), int(width * r))
@@ -211,7 +220,7 @@ class COCOKeypointDataset(Dataset):
             else "{:012}".format(id_) + ".jpg"
         )
 
-        return (res, img_info, resized_info, file_name)
+        return (res, img_info, resized_info, file_name,segments)
 
     def load_anno(self, index):
         return self.annotations[index][0]
@@ -239,14 +248,14 @@ class COCOKeypointDataset(Dataset):
     def pull_item(self, index):
         id_ = self.ids[index]
 
-        res, img_info, resized_info, _ = self.annotations[index]
+        res, img_info, resized_info, file_name,segments = self.annotations[index]
         if self.imgs is not None:
             pad_img = self.imgs[index]
             img = pad_img[: resized_info[0], : resized_info[1], :].copy()
         else:
             img = self.load_resized_img(index)
 
-        return img, res.copy(), img_info, np.array([id_])
+        return img, res.copy(), img_info, np.array([id_]),segments
 
     @Dataset.mosaic_getitem
     def __getitem__(self, index):

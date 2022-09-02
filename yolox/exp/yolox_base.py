@@ -150,7 +150,7 @@ class Exp(BaseExp):
                     hsv_prob=self.hsv_prob),
                 cache=cache_img,
             )
-
+        
         dataset = MosaicDetection(
             dataset,
             mosaic=not no_aug,
