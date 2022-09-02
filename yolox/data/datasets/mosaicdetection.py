@@ -499,7 +499,6 @@ class MosaicDetection(Dataset):
 
         return origin_img.astype(np.uint8), origin_labels
 
-
 class KeypointMosaicDetection(Dataset):
     """Detection dataset wrapper that performs mixup for normal dataset."""
 
@@ -641,7 +640,7 @@ class KeypointMosaicDetection(Dataset):
                                                 border=self.mosaic_border,
                                                 kp_bbox=self.kp_bbox)
             mix_img, padded_labels = self.preproc(mosaic_img, mosaic_labels, self.input_dim)
-            img_info = (mix_img.shape[1], mix_img.shape[0])
+            img_info = (mix_img.shape[2], mix_img.shape[1])
 
             # -----------------------------------------------------------------
             # img_info and img_id are not used for training.
@@ -772,3 +771,10 @@ class KeypointMosaicDetection(Dataset):
         origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32) #12 混合
 
         return origin_img.astype(np.uint8), origin_labels
+
+    @staticmethod
+    def collate_fn(batch):
+        img, label, img_info, img_id = zip(*batch)  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0), img_info, img_id

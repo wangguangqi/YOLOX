@@ -246,16 +246,16 @@ class KeypointTransform:
                     for i, cls in enumerate(labels[:, 0]):
                         labels[i, 0] = self.obj_flip[labels[i, 0]]
         
-        labels_out = np.zeros((nl, labels.shape[-1] + 1))
+        labels_out = torch.zeros((nl, labels.shape[-1] + 1))
         if nl:
-            labels_out[:, 1:] =  labels
+            labels_out[:, 1:] = torch.from_numpy(labels)
             
         
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
-        return img, labels_out        
+        return torch.from_numpy(img), labels_out        
 
 class TrainTransform:
     def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):

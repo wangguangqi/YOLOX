@@ -248,7 +248,7 @@ class KP_Exp(BaseExp):
         # Make sure each process has different random seed, especially for 'fork' method.
         # Check https://github.com/pytorch/pytorch/issues/63311 for more details.
         dataloader_kwargs["worker_init_fn"] = worker_init_reset_seed
-
+        dataloader_kwargs["collate_fn"] = dataset.collate_fn
         train_loader = DataLoader(self.dataset, **dataloader_kwargs)
 
         return train_loader
