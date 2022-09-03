@@ -136,7 +136,7 @@ class KP_Exp(BaseExp):
         # nms threshold
         self.nmsthre = 0.65
 
-    def get_model(self):
+    def get_model(self, isAddP6=False):
         from yolox.models import YOLOX, YOLOPAFPN, YOLOXHead
 
         def init_yolo(M):
@@ -146,8 +146,14 @@ class KP_Exp(BaseExp):
                     m.momentum = 0.03
 
         if getattr(self, "model", None) is None:
-            in_channels = [256, 512, 1024]
-            backbone = YOLOPAFPN(self.depth, self.width, in_channels=in_channels, act=self.act)
+            if isAddP6:
+                in_channels = [256,512,768,1024]
+                in_features=("dark3", "dark4", "dark5","dark6"),
+
+            else:
+                in_channels = [256, 512, 1024]
+                in_features=("dark3", "dark4", "dark5")
+            backbone = YOLOPAFPN(self.depth, self.width, in_channels=in_channels,in_features=in_features, act=self.act,isAddP6=isAddP6)
             head = YOLOXHead(self.num_classes, self.width, in_channels=in_channels, act=self.act)
             self.model = YOLOX(backbone, head)
 

@@ -132,7 +132,7 @@ class Trainer:
 
         # model related init
         torch.cuda.set_device(self.local_rank)
-        model = self.exp.get_model()
+        model = self.exp.get_model(isAddP6=True)
         logger.info(
             "Model Summary: {}".format(get_model_info(model, self.exp.test_size))
         )
